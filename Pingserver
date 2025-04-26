@@ -1,0 +1,17 @@
+import os
+
+# 文件路径（假设每行一个 hostname）
+file_path = "hostnames.txt"
+
+with open(file_path, 'r') as file:
+    for hostname in file:
+        hostname = hostname.strip()  # 去除换行符和空格
+        if hostname:  # 确保不是空行
+            print(f"Pinging {hostname}...")
+            response = os.system(f"ping -c 1 {hostname}")  # Linux/Mac
+            # response = os.system(f"ping -n 1 {hostname}")  # Windows
+            if response == 0:
+                print(f"{hostname} is reachable ✅")
+            else:
+                print(f"{hostname} is unreachable ❌")
+            print("-" * 30)

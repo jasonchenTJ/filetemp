@@ -1,0 +1,34 @@
+SET LINESIZE 200 PAGESIZE 1000 LONG 10000 TAB OFF;
+COLUMN PID_SID_SN FORMAT A17 HEAD "PID,SID,SERIAL#";
+COLUMN USERINFO FORMAT A30;
+COLUMN EVENT FORMAT A20 WORD_WRAP;
+COLUMN SQL_TEXT FORMAT A45 WORD_WRAP;
+SELECT vs.inst_id as instance_num,
+       ps.spid || ',' || vs.sid || ',' || vs.serial# AS pid_sid_sn,
+       'DB_USER: ' || vs.username ||
+       DECODE(vs.osuser, NULL, NULL, chr(10) || 'OS_USER: ' || vs.osuser) ||
+       chr(10) || 'MACHINE: ' || vs.machine ||
+       chr(10) || 'PROGRAM: ' ||
+          SUBSTR(vs.program, 1, DECODE(instr(vs.program, ' '), 0, 1000, INSTR(vs.program, ' '))) ||
+       chr(10) || 'RUNNING: ' ||
+          (CASE WHEN vs.last_call_et < 60        THEN vs.last_call_et || 's'
+                WHEN vs.last_call_et < 3600      THEN ROUND(vs.last_call_et / 60, 1) || 'm'
+                WHEN vs.last_call_et < 3600 * 24 THEN ROUND(vs.last_call_et / 3600, 1) || 'h'
+                ELSE ROUND(vs.last_call_et / 3600 / 24, 1) || 'd'
+           END) AS userinfo,
+       vs.event,
+       (SELECT 'SQL_ID: ' || sql_id || chr(10) || 'PLAN_HASH_VALUE: ' || plan_hash_value || chr(10) ||
+               REPLACE(REPLACE(sql_text, chr(10), ' '), chr(13), ' ')
+          FROM gv$sql
+         WHERE address = vs.sql_address
+           AND hash_value = vs.sql_hash_value
+           AND child_number = vs.sql_child_number
+     AND inst_id = vs.inst_id ) AS sql_text
+  FROM gv$session vs, gv$process ps
+WHERE vs.status = 'ACTIVE'
+   AND vs.username IS NOT NULL
+   AND vs.sid NOT IN (SELECT sid FROM gv$mystat WHERE rownum = 1)
+   AND vs.paddr = ps.addr
+   AND vs.inst_id = ps.inst_id
+ORDER BY vs.username,vs.inst_id
+/

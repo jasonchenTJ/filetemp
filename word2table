@@ -1,0 +1,38 @@
+from docx import Document
+from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, Date
+
+# 1. 读取Word文档
+doc = Document("knowledge_base.docx")
+table = doc.tables[0]  # 假设第一个表格是知识库
+
+# 2. 连接数据库（以SQLite为例）
+engine = create_engine("sqlite:///knowledge_base.db")
+metadata = MetaData()
+knowledge_table = Table(
+    "knowledge",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("question", String),
+    Column("answer", String),
+    Column("category", String),
+    Column("keywords", String),
+    Column("last_updated", String),
+)
+metadata.create_all(engine)
+
+# 3. 解析表格并写入数据库
+with engine.connect() as conn:
+    for row in table.rows[1:]:  # 跳过表头
+        cells = row.cells
+        data = {
+            "id": int(cells[0].text),
+            "question": cells[1].text,
+            "answer": cells[2].text,
+            "category": cells[3].text,
+            "keywords": cells[4].text,
+            "last_updated": cells[5].text,
+        }
+        conn.execute(knowledge_table.insert(), data)
+    conn.commit()
+
+print("数据已写入数据库！")

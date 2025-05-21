@@ -1,0 +1,130 @@
+import os
+from docx import Document
+from docx.shared import Inches
+import psycopg2
+from io import BytesIO
+from PIL import Image
+import base64
+import uuid
+
+# PostgreSQL连接配置
+DB_CONFIG = {
+    'host': 'localhost',
+    'database': 'your_database',
+    'user': 'your_username',
+    'password': 'your_password',
+    'port': '5432'
+}
+
+def extract_table_content(docx_path, table_index=0, target_col_index=0):
+    """
+    从Word文档中提取指定表格的指定列内容（包含文字和图片）
+    
+    参数:
+        docx_path: Word文档路径
+        table_index: 要提取的表格索引（从0开始）
+        target_col_index: 目标列索引（从0开始）
+    
+    返回:
+        list: 包含每行内容的字典，格式为 {'text': str, 'images': list}
+    """
+    doc = Document(docx_path)
+    if len(doc.tables) <= table_index:
+        raise ValueError(f"文档中不存在索引为 {table_index} 的表格")
+    
+    table = doc.tables[table_index]
+    results = []
+    
+    for row in table.rows:
+        cell = row.cells[target_col_index]
+        content = {'text': '', 'images': []}
+        
+        # 提取文本内容
+        content['text'] = cell.text
+        
+        # 提取图片
+        for paragraph in cell.paragraphs:
+            for run in paragraph.runs:
+                if run._element.xpath('.//pic:pic'):
+                    for shape in run._element.xpath('.//pic:pic'):
+                        blip = shape.xpath('.//a:blip/@r:embed')[0]
+                        image_part = doc.part.related_parts[blip]
+                        image_bytes = image_part.blob
+                        
+                        # 将图片转换为Base64编码字符串
+                        img_base64 = base64.b64encode(image_bytes).decode('utf-8')
+                        content['images'].append(img_base64)
+        
+        results.append(content)
+    
+    return results
+
+def save_to_postgresql(data, table_name='word_table_contents'):
+    """
+    将提取的数据保存到PostgreSQL数据库
+    
+    参数:
+        data: extract_table_content函数返回的数据
+        table_name: 数据库表名
+    """
+    conn = None
+    try:
+        # 连接数据库
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+        
+        # 创建表（如果不存在）
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                id SERIAL PRIMARY KEY,
+                row_index INTEGER NOT NULL,
+                text_content TEXT,
+                images JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # 插入数据
+        for idx, item in enumerate(data):
+            # 将图片列表转换为JSON格式
+            images_json = item['images'] if item['images'] else None
+            
+            cursor.execute(
+                f"INSERT INTO {table_name} (row_index, text_content, images) VALUES (%s, %s, %s)",
+                (idx, item['text'], images_json)
+            )
+        
+        conn.commit()
+        print(f"成功保存 {len(data)} 行数据到数据库")
+        
+    except Exception as e:
+        print(f"数据库操作出错: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
+
+def process_word_file(docx_path, table_index=0, target_col_index=0):
+    """
+    处理Word文件并保存到数据库
+    """
+    # 提取内容
+    extracted_data = extract_table_content(docx_path, table_index, target_col_index)
+    
+    # 保存到数据库
+    save_to_postgresql(extracted_data)
+    
+    return extracted_data
+
+# 使用示例
+if __name__ == "__main__":
+    word_file_path = "example.docx"  # 替换为你的Word文件路径
+    result = process_word_file(word_file_path, table_index=0, target_col_index=1)
+    
+    # 打印提取结果
+    for i, item in enumerate(result):
+        print(f"行 {i}:")
+        print(f"文本: {item['text']}")
+        print(f"图片数量: {len(item['images'])}")
+        print("------")

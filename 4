@@ -1,0 +1,18 @@
+SELECT
+    a.attname AS column_name,
+    pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
+    CASE a.attstorage
+        WHEN 'p' THEN 'plain (不允许压缩或线外存储)'
+        WHEN 'e' THEN 'external (允许线外存储但不压缩)'
+        WHEN 'm' THEN 'main (允许压缩，线外存储作为最后手段)'
+        WHEN 'x' THEN 'extended (允许压缩和线外存储)'
+    END AS toast_strategy,
+    a.attstattarget AS stats_target
+FROM
+    pg_catalog.pg_attribute a
+WHERE
+    a.attrelid = 'your_table_name'::regclass
+    AND a.attnum > 0
+    AND NOT a.attisdropped
+ORDER BY
+    a.attnum;

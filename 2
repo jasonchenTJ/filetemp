@@ -1,0 +1,9 @@
+SELECT 
+    relname AS table_name,
+    (SELECT relname FROM pg_class WHERE oid = c.reltoastrelid) AS toast_table_name,
+    (SELECT relnamespace::regnamespace FROM pg_class WHERE oid = c.reltoastrelid) AS toast_schema
+FROM 
+    pg_class c
+WHERE 
+    relname = 'your_table_name' 
+    AND relkind = 'r';

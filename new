@@ -1,0 +1,118 @@
+from docx import Document
+from docx.oxml.ns import qn
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+import os
+
+def get_embedded_objects_with_data(doc_path, output_dir="extracted_objects"):
+    """
+    获取Word文档中第一个表格第二列的所有嵌入对象及其二进制数据
+    
+    参数:
+        doc_path: Word文档路径
+        output_dir: 保存提取文件的目录
+        
+    返回:
+        包含嵌入对象信息和二进制数据的列表
+    """
+    doc = Document(doc_path)
+    embedded_objects = []
+    
+    # 创建输出目录
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 检查文档是否有表格
+    if not doc.tables:
+        print("文档中没有表格")
+        return embedded_objects
+    
+    # 获取第一个表格
+    first_table = doc.tables[0]
+    
+    # 遍历表格的每一行
+    for row_idx, row in enumerate(first_table.rows):
+        # 检查行是否有足够的列
+        if len(row.cells) < 2:
+            continue  # 跳过列数不足的行
+            
+        # 获取第二列(索引1)的单元格
+        second_cell = row.cells[1]
+        
+        # 在单元格的XML中查找嵌入对象
+        for element in second_cell._element.xpath('.//w:object|.//w:oleObject'):
+            try:
+                # 获取对象属性
+                obj_id = element.xpath('.//o:OLEObject/@r:id', namespaces=element.nsmap)[0]
+                prog_id = element.xpath('.//o:OLEObject/@ProgID', namespaces=element.nsmap)[0]
+                display_name = element.xpath('.//o:OLEObject/@DisplayName', 
+                                          namespaces=element.nsmap, default=[''])[0]
+                
+                # 获取二进制数据
+                binary_data = None
+                for rel in doc.part.rels.values():
+                    if rel.reltype == RT.OLE_OBJECT and rel.rId == obj_id:
+                        binary_data = rel.target_part.blob
+                        break
+                
+                # 确定文件扩展名
+                extension = get_extension_from_progid(prog_id)
+                filename = f"{display_name or 'embedded_object'}_{row_idx}{extension}"
+                filepath = os.path.join(output_dir, filename)
+                
+                # 保存到文件
+                if binary_data:
+                    with open(filepath, 'wb') as f:
+                        f.write(binary_data)
+                
+                embedded_objects.append({
+                    'row_index': row_idx,
+                    'object_id': obj_id,
+                    'prog_id': prog_id,
+                    'display_name': display_name,
+                    'binary_data': binary_data,
+                    'saved_path': filepath if binary_data else None,
+                    'extension': extension
+                })
+                
+            except (IndexError, AttributeError, KeyError) as e:
+                print(f"解析嵌入对象时出错: {e}")
+                continue
+    
+    return embedded_objects
+
+def get_extension_from_progid(prog_id):
+    """
+    根据ProgID确定文件扩展名
+    """
+    prog_id = prog_id.lower()
+    if 'excel' in prog_id:
+        return '.xlsx' if '12' in prog_id else '.xls'
+    elif 'word' in prog_id:
+        return '.docx' if '12' in prog_id else '.doc'
+    elif 'powerpoint' in prog_id or 'ppt' in prog_id:
+        return '.pptx' if '12' in prog_id else '.ppt'
+    elif 'acrobat' in prog_id or 'pdf' in prog_id:
+        return '.pdf'
+    elif 'visio' in prog_id:
+        return '.vsdx' if '12' in prog_id else '.vsd'
+    else:
+        return '.bin'
+
+if __name__ == "__main__":
+    doc_path = "your_document.docx"  # 替换为你的文档路径
+    output_dir = "extracted_objects"
+    
+    embedded_objs = get_embedded_objects_with_data(doc_path, output_dir)
+    
+    print(f"\n在第一个表格的第二列中找到 {len(embedded_objs)} 个嵌入对象:")
+    for idx, obj in enumerate(embedded_objs, 1):
+        print(f"\n对象 {idx}:")
+        print(f"  所在行: {obj['row_index'] + 1}")
+        print(f"  对象ID: {obj['object_id']}")
+        print(f"  程序ID: {obj['prog_id']}")
+        print(f"  显示名称: {obj['display_name']}")
+        print(f"  文件类型: {obj['extension']}")
+        if obj['binary_data']:
+            print(f"  数据大小: {len(obj['binary_data'])} 字节")
+            print(f"  保存路径: {obj['saved_path']}")
+        else:
+            print("  警告: 未能提取二进制数据")

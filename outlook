@@ -1,0 +1,167 @@
+import base64
+import psycopg2
+from docx import Document
+from lxml import etree
+from typing import Dict, Any
+from io import BytesIO
+import uuid
+
+class WordTableOutlookAttachmentSaver:
+    def __init__(self, db_config: Dict[str, Any]):
+        """初始化数据库连接"""
+        self.db_config = db_config
+        self.conn = psycopg2.connect(**db_config)
+        
+        # 定义XML命名空间
+        self.namespaces = {
+            'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+            'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+            'o': 'urn:schemas-microsoft-com:office:office',
+            'v': 'urn:schemas-microsoft-com:vml',
+            'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+        }
+        
+        # 创建表（如果不存在）
+        self._create_table_if_not_exists()
+
+    def __del__(self):
+        """确保数据库连接关闭"""
+        if hasattr(self, 'conn') and self.conn:
+            self.conn.close()
+    
+    def _create_table_if_not_exists(self):
+        """创建存储附件数据的表"""
+        with self.conn.cursor() as cursor:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS word_table_outlook_attachments (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                document_id VARCHAR(100),
+                table_index INTEGER,
+                row_index INTEGER,
+                cell_index INTEGER,
+                shape_id VARCHAR(50),
+                attachment_name VARCHAR(255),
+                attachment_size INTEGER,
+                attachment_data BYTEA,
+                content_type VARCHAR(100) DEFAULT 'application/vnd.ms-outlook',
+                extracted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            
+            CREATE INDEX IF NOT EXISTS idx_word_table_outlook_attachments_document 
+            ON word_table_outlook_attachments(document_id);
+            """)
+            self.conn.commit()
+    
+    def process_document(self, docx_path: str, document_id: str):
+        """
+        处理Word文档，提取表格中的Outlook附件并保存到数据库
+        
+        参数:
+            docx_path: Word文档路径
+            document_id: 文档唯一标识符
+        """
+        doc = Document(docx_path)
+        
+        # 遍历所有表格
+        for table_idx, table in enumerate(doc.tables):
+            # 遍历表格行
+            for row_idx, row in enumerate(table.rows):
+                # 遍历行中的单元格
+                for cell_idx, cell in enumerate(row.cells):
+                    # 获取单元格的XML内容
+                    cell_xml = cell._element.xml
+                    cell_tree = etree.fromstring(cell_xml)
+                    
+                    # 查找单元格中的Outlook附件
+                    self._process_cell_shapes(
+                        cell_tree, 
+                        document_id,
+                        table_idx,
+                        row_idx,
+                        cell_idx
+                    )
+    
+    def _process_cell_shapes(self, cell_tree, document_id, table_idx, row_idx, cell_idx):
+        """处理单元格中的形状，查找Outlook附件"""
+        # 查找所有OLE对象
+        ole_objects = cell_tree.xpath('//o:OLEObject', namespaces=self.namespaces)
+        
+        for ole in ole_objects:
+            # 检查是否是Outlook消息
+            prog_id = ole.xpath('@ProgID', namespaces=self.namespaces)
+            if prog_id and 'Outlook' in prog_id[0]:
+                try:
+                    # 获取形状ID
+                    shape_id = ole.xpath('@ShapeID', namespaces=self.namespaces)[0]
+                    
+                    # 查找对应的形状元素
+                    shape = cell_tree.xpath(f'//v:shape[@id="{shape_id}"]', namespaces=self.namespaces)[0]
+                    
+                    # 获取OLE对象数据
+                    bin_data = shape.xpath('.//o:OLEObject/a:blob', namespaces=self.namespaces)[0].text
+                    ole_bytes = base64.b64decode(bin_data)
+                    
+                    # 获取附件名称
+                    attachment_name = ole.xpath('@ObjectName', namespaces=self.namespaces)
+                    attachment_name = attachment_name[0] if attachment_name else f"outlook_attachment_{uuid.uuid4().hex[:8]}"
+                    
+                    # 保存到数据库
+                    self._save_attachment_to_db(
+                        document_id=document_id,
+                        table_idx=table_idx,
+                        row_idx=row_idx,
+                        cell_idx=cell_idx,
+                        shape_id=shape_id,
+                        attachment_name=attachment_name,
+                        attachment_data=ole_bytes
+                    )
+                    
+                except Exception as e:
+                    print(f"处理表格{table_idx}行{row_idx}列{cell_idx}的形状时出错: {e}")
+                    continue
+    
+    def _save_attachment_to_db(self, document_id: str, table_idx: int, row_idx: int, 
+                             cell_idx: int, shape_id: str, attachment_name: str, 
+                             attachment_data: bytes):
+        """将附件保存到PostgreSQL数据库"""
+        query = """
+        INSERT INTO word_table_outlook_attachments 
+        (document_id, table_index, row_index, cell_index, shape_id, 
+         attachment_name, attachment_size, attachment_data)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        
+        with self.conn.cursor() as cursor:
+            cursor.execute(query, (
+                document_id,
+                table_idx,
+                row_idx,
+                cell_idx,
+                shape_id,
+                attachment_name,
+                len(attachment_data),
+                psycopg2.Binary(attachment_data)  # 使用Binary包装二进制数据
+            ))
+            self.conn.commit()
+
+# 使用示例
+if __name__ == "__main__":
+    # 数据库配置
+    db_config = {
+        'dbname': 'your_database',
+        'user': 'your_username',
+        'password': 'your_password',
+        'host': 'localhost',
+        'port': '5432'
+    }
+    
+    # 创建处理器实例
+    processor = WordTableOutlookAttachmentSaver(db_config)
+    
+    # 处理Word文档
+    docx_path = "example.docx"  # 替换为你的Word文档路径
+    document_id = "doc_123"  # 替换为你的文档ID
+    
+    # 提取并保存Outlook附件
+    processor.process_document(docx_path, document_id)
+    print("Word表格中的Outlook附件已保存到数据库")

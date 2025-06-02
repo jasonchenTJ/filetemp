@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel风格表格 - jQuery分页示例</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 5px;
+        }
+        h1 {
+            color: #444;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .excel-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .excel-table th, .excel-table td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        .excel-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+        .excel-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .excel-table tr:hover {
+            background-color: #f1f1f1;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .pagination button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin: 0 4px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .pagination button:hover {
+            background-color: #45a049;
+        }
+        .pagination button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .pagination-info {
+            text-align: center;
+            margin-top: 10px;
+            color: #666;
+        }
+        .search-container {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .search-container input {
+            padding: 8px;
+            width: 300px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .header-cell {
+            position: relative;
+        }
+        .sort-icon {
+            margin-left: 5px;
+            cursor: pointer;
+        }
+        .selected-row {
+            background-color: #d4edda !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Excel风格表格 - 分页显示</h1>
+        
+        <div class="search-container">
+            <div>
+                <button id="add-row">添加行</button>
+                <button id="delete-row">删除行</button>
+            </div>
+            <input type="text" id="search-input" placeholder="搜索...">
+        </div>
+        
+        <div class="table-container">
+            <table class="excel-table" id="data-table">
+                <thead>
+                    <tr>
+                        <th class="header-cell">ID <span class="sort-icon" data-column="0">↓↑</span></th>
+                        <th class="header-cell">姓名 <span class="sort-icon" data-column="1">↓↑</span></th>
+                        <th class="header-cell">部门 <span class="sort-icon" data-column="2">↓↑</span></th>
+                        <th class="header-cell">职位 <span class="sort-icon" data-column="3">↓↑</span></th>
+                        <th class="header-cell">薪资 <span class="sort-icon" data-column="4">↓↑</span></th>
+                        <th class="header-cell">入职日期 <span class="sort-icon" data-column="5">↓↑</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 数据将通过jQuery动态加载 -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="pagination-info" id="page-info">第1页，共1页，总计0条记录</div>
+        
+        <div class="pagination">
+            <button id="first-page">首页</button>
+            <button id="prev-page">上一页</button>
+            <button id="next-page">下一页</button>
+            <button id="last-page">末页</button>
+        </div>
+        
+        <div style="margin-top: 20px; text-align: center;">
+            <span>每页显示：</span>
+            <select id="page-size">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+            </select>
+            <span>条</span>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // 模拟数据
+            function generateMockData(count) {
+                const departments = ['技术部', '市场部', '财务部', '人力资源部', '销售部'];
+                const positions = ['经理', '主管', '工程师', '专员', '助理'];
+                const firstNames = ['张', '李', '王', '赵', '刘', '陈', '杨', '黄', '吴', '周'];
+                const lastNames = ['伟', '芳', '娜', '秀英', '敏', '静', '丽', '强', '磊', '军'];
+                
+                const data = [];
+                for (let i = 1; i <= count; i++) {
+                    const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+                    const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+                    const name = firstName + lastName;
+                    const department = departments[Math.floor(Math.random() * departments.length)];
+                    const position = positions[Math.floor(Math.random() * positions.length)];
+                    const salary = Math.floor(Math.random() * 20000) + 5000;
+                    const date = new Date(Date.now() - Math.floor(Math.random() * 1000 * 60 * 60 * 24 * 365 * 5));
+                    const hireDate = date.toISOString().split('T')[0];
+                    
+                    data.push({
+                        id: i,
+                        name: name,
+                        department: department,
+                        position: position,
+                        salary: salary,
+                        hireDate: hireDate
+                    });
+                }
+                return data;
+            }
+            
+            // 初始化变量
+            let allData = generateMockData(200);
+            let currentPage = 1;
+            let pageSize = parseInt($('#page-size').val());
+            let sortColumn = 0;
+            let sortDirection = 'asc';
+            let selectedRowId = null;
+            
+            // 渲染表格
+            function renderTable() {
+                const $tbody = $('#data-table tbody');
+                $tbody.empty();
+                
+                // 排序数据
+                const sortedData = [...allData].sort((a, b) => {
+                    const valA = getValueByColumn(a, sortColumn);
+                    const valB = getValueByColumn(b, sortColumn);
+                    
+                    if (typeof valA === 'string') {
+                        return sortDirection === 'asc' 
+                            ? valA.localeCompare(valB)
+                            : valB.localeCompare(valA);
+                    } else {
+                        return sortDirection === 'asc' 
+                            ? valA - valB
+                            : valB - valA;
+                    }
+                });
+                
+                // 分页
+                const totalPages = Math.ceil(sortedData.length / pageSize);
+                currentPage = Math.min(currentPage, totalPages);
+                if (currentPage < 1 && totalPages > 0) currentPage = 1;
+                
+                const startIndex = (currentPage - 1) * pageSize;
+                const endIndex = Math.min(startIndex + pageSize, sortedData.length);
+                const pageData = sortedData.slice(startIndex, endIndex);
+                
+                // 填充表格
+                pageData.forEach((item, index) => {
+                    const $row = $('<tr>').attr('data-id', item.id);
+                    if (item.id === selectedRowId) {
+                        $row.addClass('selected-row');
+                    }
+                    
+                    $row.append(`<td>${item.id}</td>`);
+                    $row.append(`<td>${item.name}</td>`);
+                    $row.append(`<td>${item.department}</td>`);
+                    $row.append(`<td>${item.position}</td>`);
+                    $row.append(`<td>${item.salary.toLocaleString()}</td>`);
+                    $row.append(`<td>${item.hireDate}</td>`);
+                    
+                    $tbody.append($row);
+                });
+                
+                // 更新分页信息
+                $('#page-info').text(`第${currentPage}页，共${totalPages}页，总计${sortedData.length}条记录`);
+                
+                // 更新按钮状态
+                $('#first-page, #prev-page').prop('disabled', currentPage <= 1);
+                $('#next-page, #last-page').prop('disabled', currentPage >= totalPages);
+                
+                // 更新排序图标
+                $('.sort-icon').text('↓↑');
+                const $currentSortIcon = $(`.sort-icon[data-column="${sortColumn}"]`);
+                $currentSortIcon.text(sortDirection === 'asc' ? '↑' : '↓');
+            }
+            
+            // 根据列索引获取值
+            function getValueByColumn(item, columnIndex) {
+                switch (columnIndex) {
+                    case 0: return item.id;
+                    case 1: return item.name;
+                    case 2: return item.department;
+                    case 3: return item.position;
+                    case 4: return item.salary;
+                    case 5: return item.hireDate;
+                    default: return '';
+                }
+            }
+            
+            // 初始化表格
+            renderTable();
+            
+            // 分页按钮事件
+            $('#first-page').click(function() {
+                currentPage = 1;
+                renderTable();
+            });
+            
+            $('#prev-page').click(function() {
+                currentPage--;
+                renderTable();
+            });
+            
+            $('#next-page').click(function() {
+                currentPage++;
+                renderTable();
+            });
+            
+            $('#last-page').click(function() {
+                currentPage = Math.ceil(allData.length / pageSize);
+                renderTable();
+            });
+            
+            // 每页显示条数变化
+            $('#page-size').change(function() {
+                pageSize = parseInt($(this).val());
+                currentPage = 1;
+                renderTable();
+            });
+            
+            // 排序事件
+            $('.sort-icon').click(function() {
+                const column = parseInt($(this).data('column'));
+                
+                if (sortColumn === column) {
+                    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    sortColumn = column;
+                    sortDirection = 'asc';
+                }
+                
+                renderTable();
+            });
+            
+            // 搜索功能
+            $('#search-input').on('input', function() {
+                const searchTerm = $(this).val().toLowerCase();
+                
+                if (searchTerm.trim() === '') {
+                    allData = generateMockData(200);
+                } else {
+                    allData = generateMockData(200).filter(item => 
+                        item.id.toString().includes(searchTerm) ||
+                        item.name.toLowerCase().includes(searchTerm) ||
+                        item.department.toLowerCase().includes(searchTerm) ||
+                        item.position.toLowerCase().includes(searchTerm) ||
+                        item.salary.toString().includes(searchTerm) ||
+                        item.hireDate.includes(searchTerm)
+                    );
+                }
+                
+                currentPage = 1;
+                renderTable();
+            });
+            
+            // 行选择
+            $('#data-table').on('click', 'tbody tr', function() {
+                const $row = $(this);
+                const id = parseInt($row.attr('data-id'));
+                
+                $('#data-table tbody tr').removeClass('selected-row');
+                $row.addClass('selected-row');
+                selectedRowId = id;
+            });
+            
+            // 添加行
+            $('#add-row').click(function() {
+                const newId = allData.length > 0 ? Math.max(...allData.map(item => item.id)) + 1 : 1;
+                const newRow = {
+                    id: newId,
+                    name: '新员工',
+                    department: '未分配',
+                    position: '新员工',
+                    salary: 5000,
+                    hireDate: new Date().toISOString().split('T')[0]
+                };
+                
+                allData.unshift(newRow);
+                selectedRowId = newId;
+                currentPage = 1;
+                renderTable();
+            });
+            
+            // 删除行
+            $('#delete-row').click(function() {
+                if (selectedRowId !== null) {
+                    allData = allData.filter(item => item.id !== selectedRowId);
+                    selectedRowId = null;
+                    
+                    // 如果当前页没有数据且不是第一页，则回到上一页
+                    if ($('#data-table tbody tr').length === 1 && currentPage > 1) {
+                        currentPage--;
+                    }
+                    
+                    renderTable();
+                } else {
+                    alert('请先选择要删除的行');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

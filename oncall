@@ -1,0 +1,189 @@
+Active Sessions: 
+
+SET LINESIZE 200 PAGESIZE 1000 LONG 10000 TAB OFF;
+COLUMN PID_SID_SN FORMAT A17 HEAD "PID,SID,SERIAL#";
+COLUMN USERINFO FORMAT A30;
+COLUMN EVENT FORMAT A20 WORD_WRAP;
+COLUMN SQL_TEXT FORMAT A45 WORD_WRAP;
+SELECT vs.inst_id as instance_num,
+       ps.spid || ',' || vs.sid || ',' || vs.serial# AS pid_sid_sn,
+       'DB_USER: ' || vs.username ||
+       DECODE(vs.osuser, NULL, NULL, chr(10) || 'OS_USER: ' || vs.osuser) ||
+       chr(10) || 'MACHINE: ' || vs.machine ||
+       chr(10) || 'PROGRAM: ' ||
+          SUBSTR(vs.program, 1, DECODE(instr(vs.program, ' '), 0, 1000, INSTR(vs.program, ' '))) ||
+       chr(10) || 'RUNNING: ' ||
+          (CASE WHEN vs.last_call_et < 60        THEN vs.last_call_et || 's'
+                WHEN vs.last_call_et < 3600      THEN ROUND(vs.last_call_et / 60, 1) || 'm'
+                WHEN vs.last_call_et < 3600 * 24 THEN ROUND(vs.last_call_et / 3600, 1) || 'h'
+                ELSE ROUND(vs.last_call_et / 3600 / 24, 1) || 'd'
+           END) AS userinfo,
+       vs.event,
+       (SELECT 'SQL_ID: ' || sql_id || chr(10) || 'PLAN_HASH_VALUE: ' || plan_hash_value || chr(10) ||
+               REPLACE(REPLACE(sql_text, chr(10), ' '), chr(13), ' ')
+          FROM gv$sql
+         WHERE address = vs.sql_address
+           AND hash_value = vs.sql_hash_value
+           AND child_number = vs.sql_child_number
+     AND inst_id = vs.inst_id ) AS sql_text
+  FROM gv$session vs, gv$process ps
+WHERE vs.status = 'ACTIVE'
+   AND vs.username IS NOT NULL
+   AND vs.sid NOT IN (SELECT sid FROM gv$mystat WHERE rownum = 1)
+   AND vs.paddr = ps.addr
+   AND vs.inst_id = ps.inst_id
+ORDER BY vs.username,vs.inst_id
+/
+
+Session list by schema
+
+SET LINESIZE 300;
+COL USERNAME FORMAT A20;
+COL PROGRAM FORMAT A20;
+COL STATUS FORMAT A20;
+COL TYPE FORMAT A20;
+SELECT INST_ID, USERNAME,TYPE,PROGRAM,STATUS,MACHINE FROM GV$SESSION WHERE USERNAME = '&SCHEMA' ORDER BY INST_ID, STATUS;
+
+
+Long time running process
+
+set linesize 200 pagesize 50
+column spid_sid_s# format A18 heading 'SPID,SID,SERIAL#'
+column operation format A20 word_wrap
+column progress format A13
+column total format A15
+column eta format A8
+column message format A30 word_wrap
+column username format A10
+select a.inst_id,
+       c.spid || ',' || a.sid || ',' || a.serial# as spid_sid_s#,
+       a.opname as operation,
+       a.totalwork || ' ' || a.units as total,
+       round(a.sofar/a.totalwork*100) || '% in ' || a.elapsed_seconds || 's' as progress,
+       decode(a.sofar, 0, 'N/A', round(a.elapsed_seconds * (a.totalwork - a.sofar) / a.sofar / 60, 1) || 'm') as ETA,
+       a.message,
+       a.username
+  from gv$session_longops a,
+       gv$session b,
+       gv$process c
+where a.sid = b.sid
+   and a.serial# = b.serial#
+   and b.paddr = c.addr
+   and a.sofar < a.totalwork
+   and a.inst_id = b.inst_id
+   and b.inst_id = c.inst_id
+/
+
+
+Undo running process
+
+set linesize 1000;
+col  NAME format a20;
+col username format a20;
+col machine format a20;
+SELECT s.inst_id,
+       r.NAME,
+       s.sid SID,
+       s.serial#,
+       s.username,
+       s.machine,
+       t.start_time,
+       t.status,
+       (t.used_ublk*1024*8)/1024/1024/1024
+  FROM gv$session s, gv$transaction t, v$rollname r, gv$rollstat g
+WHERE t.addr = s.taddr
+   AND t.xidusn = r.usn
+   AND r.usn = g.usn
+   And s.STATUS = 'ACTIVE'
+   and s.inst_id = t.inst_id
+   and t.inst_id = g.inst_id
+ORDER BY t.used_ublk desc;
+
+
+
+Blocking sessions
+
+set linesize 200 pagesize 50 tab off long 10000
+column pid_sid_sn format A15
+column status format A15
+column username format A20 word_wrap
+column os_info format A25 word_wrap
+column program_module format A25 word_wrap
+column wait_info format A30 word_wrap
+column sql format A30 word_wrap
+SELECT a.spid || ',' || b.sid || ',' || b.serial# AS pid_sid_sn,
+        b.username || ' (' || b.status || ')'      AS username,
+        CASE
+                WHEN b.sid = c.waiting_session
+                THEN 'Waiting ' || c.holding_session
+                WHEN b.sid = c.holding_session
+                THEN 'Blocking ' || c.waiting_session
+        END                                              AS status,
+        b.osuser || nvl2(b.osuser, '@', '') || b.machine AS os_info,
+        CASE
+                WHEN b.program IS NULL OR b.module IS NULL
+                THEN b.program || b.module
+                WHEN b.program = b.module
+                THEN b.program
+                ELSE b.program || ' - ' || b.module
+        END                              AS program_module,
+        b.wait_class || ' - ' || b.event AS wait_info,
+        (SELECT sql_text
+           FROM v$sql
+          WHERE address = b.sql_address
+            AND hash_value = b.sql_hash_value
+        ) AS sql
+   FROM v$process a,
+        v$session b,
+        dba_waiters c
+  WHERE a.addr = b.paddr
+    AND b.sid IN (c.waiting_session, c.holding_session)
+ORDER BY c.waiting_session || '' || c.holding_session,
+         status DESC
+/
+
+
+DDL & DML locks
+
+set linesize 2000;
+set pagesize 500;
+col OWNER format a20;
+col NAME format a30;
+col BLOCKING_OTHERS format a30;
+select * from dba_dml_locks;
+select * from dba_ddl_locks;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

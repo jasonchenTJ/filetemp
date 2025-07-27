@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""
+Linux Server Connectivity Tester
+
+This program tests SSH connectivity to multiple Linux servers using credentials
+stored in a YAML configuration file. It checks if each server is reachable and
+if authentication succeeds.
+
+Requirements:
+- Python 3.6+
+- PyYAML package
+- paramiko package (for SSH connections)
+"""
+
+import yaml
+import paramiko
+import socket
+import time
+from typing import Dict, List, Optional, Tuple
+
+# Constants for configuration
+CONFIG_FILE = 'servers.yaml'
+TIMEOUT = 10  # Connection timeout in seconds
+RETRY_ATTEMPTS = 2  # Number of connection retry attempts
+
+
+def load_config(config_file: str) -> Dict:
+    """
+    Load server configuration from YAML file.
+
+    Args:
+        config_file: Path to the YAML configuration file
+
+    Returns:
+        Dictionary containing server configurations
+
+    Raises:
+        FileNotFoundError: If config file doesn't exist
+        yaml.YAMLError: If config file has invalid YAML syntax
+    """
+    try:
+        with open(config_file, 'r') as f:
+            config = yaml.safe_load(f)
+            return config or {}  # Return empty dict if file is empty
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Configuration file {config_file} not found")
+    except yaml.YAMLError as e:
+        raise yaml.YAMLError(f"Invalid YAML syntax in {config_file}: {e}")
+
+
+def test_ssh_connection(host: str, port: int, username: str, 
+                        password: str, timeout: int = TIMEOUT) -> Tuple[bool, str]:
+    """
+    Test SSH connection to a server.
+
+    Args:
+        host: Server hostname or IP address
+        port: SSH port number
+        username: SSH username
+        password: SSH password
+        timeout: Connection timeout in seconds
+
+    Returns:
+        Tuple of (success: bool, message: str)
+    """
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
+    try:
+        # First check if the host is reachable (TCP connection)
+        start_time = time.time()
+        sock = socket.create_connection((host, port), timeout=timeout)
+        sock.close()
+        network_latency = time.time() - start_time
+
+        # Attempt SSH connection
+        ssh.connect(host, port=port, username=username, 
+                   password=password, timeout=timeout)
+        
+        # If we get here, connection was successful
+        ssh.close()
+        return (True, f"Successfully connected (latency: {network_latency:.2f}s)")
+    
+    except socket.timeout:
+        return (False, "Connection timeout - server may be down or network issues")
+    except socket.error as e:
+        return (False, f"Network error: {str(e)}")
+    except paramiko.AuthenticationException:
+        return (False, "Authentication failed - invalid credentials")
+    except paramiko.SSHException as e:
+        return (False, f"SSH connection error: {str(e)}")
+    except Exception as e:
+        return (False, f"Unexpected error: {str(e)}")
+    finally:
+        # Ensure SSH connection is closed
+        try:
+            ssh.close()
+        except:
+            pass
+
+
+def test_all_servers(config: Dict, retry: int = RETRY_ATTEMPTS) -> List[Dict]:
+    """
+    Test connectivity to all servers in the configuration.
+
+    Args:
+        config: Dictionary containing server configurations
+        retry: Number of retry attempts for failed connections
+
+    Returns:
+        List of dictionaries with test results for each server
+    """
+    results = []
+    
+    if not config.get('servers'):
+        print("Warning: No servers found in configuration")
+        return results
+    
+    for server in config['servers']:
+        host = server.get('host')
+        port = server.get('port', 22)  # Default SSH port
+        username = server.get('username')
+        password = server.get('password')
+        
+        if not all([host, username, password]):
+            results.append({
+                'host': host or 'Unknown',
+                'success': False,
+                'message': "Incomplete server configuration (missing host, username, or password)"
+            })
+            continue
+        
+        # Try connecting (with retries)
+        last_error = None
+        for attempt in range(1, retry + 1):
+            success, message = test_ssh_connection(host, port, username, password)
+            if success:
+                results.append({
+                    'host': host,
+                    'success': True,
+                    'message': message,
+                    'attempts': attempt
+                })
+                break
+            last_error = message
+            if attempt < retry:
+                time.sleep(1)  # Brief delay before retry
+        else:
+            # All attempts failed
+            results.append({
+                'host': host,
+                'success': False,
+                'message': f"Failed after {retry} attempts. Last error: {last_error}",
+                'attempts': retry
+            })
+    
+    return results
+
+
+def print_results(results: List[Dict]) -> None:
+    """
+    Print connection test results in a readable format.
+
+    Args:
+        results: List of test results from test_all_servers()
+    """
+    print("\nServer Connectivity Test Results:")
+    print("-" * 60)
+    
+    success_count = sum(1 for r in results if r['success'])
+    failure_count = len(results) - success_count
+    
+    for result in results:
+        status = "SUCCESS" if result['success'] else "FAILURE"
+        color_code = "\033[92m" if result['success'] else "\033[91m"
+        reset_code = "\033[0m"
+        
+        print(f"{color_code}{status}{reset_code}: {result['host']}")
+        print(f"  Attempts: {result.get('attempts', 1)}")
+        print(f"  Message: {result['message']}")
+        print("-" * 60)
+    
+    print(f"\nSummary: {success_count} successful, {failure_count} failed")
+
+
+def main():
+    """
+    Main program execution.
+    """
+    print("Linux Server Connectivity Tester")
+    print("Loading configuration...")
+    
+    try:
+        config = load_config(CONFIG_FILE)
+    except Exception as e:
+        print(f"Error loading configuration: {e}")
+        return
+    
+    print(f"Testing {len(config.get('servers', []))} servers...")
+    results = test_all_servers(config)
+    print_results(results)
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+# Linux servers configuration
+servers:
+  - host: server1.example.com
+    port: 22
+    username: admin
+    password: securepassword1
+
+  - host: 192.168.1.100
+    username: root
+    password: anotherpassword
+
+  - host: db-server.example.com
+    port: 2222
+    username: dbadmin
+    password: dbpassword123

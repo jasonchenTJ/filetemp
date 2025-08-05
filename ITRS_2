@@ -1,0 +1,35 @@
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    # 启动浏览器
+    browser = p.chromium.launch(headless=False)  # headless=False 显示浏览器窗口
+    
+    # 创建新页面
+    page = browser.new_page()
+    
+    # 导航到目标URL
+    page.goto('https://example.com/with-jstree')
+    
+    # 等待树加载完成
+    page.wait_for_selector('.jstree')
+    
+    # 点击展开节点（根据实际页面结构调整选择器）
+    page.click('.jstree-icon.jstree-ocl >> nth=0')  # 点击第一个展开图标
+    
+    # 等待内容加载（可以更精确地等待特定元素出现）
+    page.wait_for_selector('.jstree-node.jstree-open', state='visible')
+    
+    # 获取展开后的内容
+    expanded_content = page.query_selector('.jstree-node.jstree-open')
+    print("展开后的内容:")
+    print(expanded_content.text_content())
+    
+    # 如果需要可以继续交互
+    # page.click('text="子节点名称"')
+    
+    # 获取完整页面HTML
+    print("\n完整页面HTML:")
+    print(page.content())
+    
+    # 关闭浏览器
+    browser.close()

@@ -1,0 +1,41 @@
+JOBS = [
+        {
+            'id': 'print_job', # 任务id
+            'func': '__main__:print_job', # 任务执行程序
+            'args': None, # 执行程序参数
+            'trigger': 'interval', # 任务执行类型，定时器
+            'seconds': 300, # 任务执行时间，单位秒\
+            'max_instances': 200,
+        },
+       # {
+       #     'id': 'es_slow_query', # 任务id
+       #     'func': '__main__:slowQueryCheck', # 任务执行程序
+       #     'args': None, # 执行程序参数
+       #     'trigger': 'interval', # 任务执行类型，定时器
+       #     'seconds': 300000, # 任务执行时间，单位秒
+       #     'max_instances': 200,
+       # },
+       {
+            'id': 'mysql_daily_job', # 任务id
+            'func': '__main__:dailyMonotorJob', # 任务执行程序
+            'args': None, # 执行程序参数
+            'trigger': 'cron', # 任务执行类型，定时器
+            'hour': 1, # 任务执行时间，单位秒
+            'minute': 30,
+            'max_instances': 300,
+        },
+
+    ]
+SCHEDULER_TIMEZONE = 'Asia/Shanghai'
+
+
+    scheduler = APScheduler()  # 实例化APScheduler
+    scheduler.init_app(app)  # 把任务列表载入实例flask
+    scheduler.start()  # 启动任务计划
+
+def dailyMonotorJob():
+    print("###############start fs mon job ##################")
+    p = FSMonitor(app)
+    p.main()
+    print("###############end fs mon job ##################")
+

@@ -1,0 +1,70 @@
+window.setInterval(function(){
+    getData()
+},30000);
+
+function getData(){
+$.ajax({
+type:"GET",
+url:"/monitor/dashboard",
+dataType:"text",
+success:function(data){
+
+data_arry = eval('['+data.split('#')+']');
+mongo_total = data_arry[0].total_cnt;
+mongo_up = data_arry[0].active_cnt;
+mongo_down =  data_arry[0].inactive_cnt;
+
+mysql_total = data_arry[1].total_cnt;
+mysql_up = data_arry[1].active_cnt;
+mysql_down =  data_arry[1].inactive_cnt;
+
+pg_total = data_arry[2].total_cnt;
+pg_up = data_arry[2].active_cnt;
+pg_down =  data_arry[2].inactive_cnt;
+
+option2.series[0].data[0].value= mongo_down;
+option2.series[0].data[0].name= 'down';
+option2.series[0].color= 'red';
+charInstanceDown.setOption(option2);
+option2.series[0].data[0].value= mongo_up;
+option2.series[0].data[0].name= 'up';
+option2.series[0].color= 'green';
+charInstanceUp.setOption(option2);
+option2.series[0].data[0].value= mongo_total;
+option2.series[0].data[0].name= 'total';
+option2.series[0].color= 'green';
+charInstanceTotal.setOption(option2);
+mongo_rt.innerHTML = "<B>Refresh Time："+new Date().toLocaleString();+"</B>";
+
+option_mysql.series[0].data[0].value= mysql_down;
+option_mysql.series[0].data[0].name= 'down';
+option_mysql.series[0].color= 'red';
+charInstanceDown_mysql.setOption(option_mysql);
+option_mysql.series[0].data[0].value= mysql_up;
+option_mysql.series[0].data[0].name= 'up';
+option_mysql.series[0].color= 'green';
+charInstanceUp_mysql.setOption(option_mysql);
+option_mysql.series[0].data[0].value= mysql_total;
+option_mysql.series[0].data[0].name= 'total';
+option_mysql.series[0].color= 'green';
+charInstanceTotal_mysql.setOption(option_mysql);
+mysql_rt.innerHTML = "<B>Refresh Time："+new Date().toLocaleString();+"</B>";
+
+
+option_pg.series[0].data[0].value= pg_down;
+option_pg.series[0].data[0].name= 'down';
+option_pg.series[0].color= 'red';
+charInstanceDown_pg.setOption(option_pg);
+option_pg.series[0].data[0].value= pg_up;
+option_pg.series[0].data[0].name= 'up';
+option_pg.series[0].color= 'green';
+charInstanceUp_pg.setOption(option_pg);
+option_pg.series[0].data[0].value= pg_total;
+option_pg.series[0].data[0].name= 'total';
+option_pg.series[0].color= 'green';
+charInstanceTotal_pg.setOption(option_pg);
+pg_rt.innerHTML = "<B>Refresh Time："+new Date().toLocaleString();+"</B>";
+
+}
+});
+}

@@ -1,0 +1,356 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+        "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="referer" content="never">
+    <meta name="renderer" content="webkit">
+
+  <script src="/static/echarts.min.js"></script>
+  <script src="/static/jquery-1.10.2.min.js"></script>
+
+<style>
+
+        .box{
+            width: 100%;
+            height: 100%;
+            margin: auto;
+            float: left;
+        }
+       .pie{
+            width: 100%;
+            height: 100%;
+            margin: auto;
+            float: left;
+        }
+
+    </style>
+
+
+    <body style="background-color:black;">
+    <div class="container-fluid" style="padding-bottom: 50px;">
+                <table> <tr>
+                    <td>
+                     <img src="/static/img/mongo_logo.png" alt="" width="280px" height="150px">
+                        </td>
+                 <!--
+
+                 --><td>
+                 <div class= 'box' id="InstanceTotal"  style="height: 250px;width: 250px"></div>
+                    </td><td>
+                 <div class= 'box' id="InstanceUp"  style="height: 250px;width: 250px"></div>
+                </td><td>
+                 <div class= 'box' id="InstanceDown"  style="height: 250px;width: 250px"></div>
+                </td>
+                    <td>
+                  <div class= 'pie' id="container" ></div>
+                        <FONT id="mongo_rt" style="FONT-SIZE: 30pt" face=华文新魏 color=#336699></FONT>
+                    </td>
+                </tr>
+                    <tr>
+                    <td>
+                     <img src="/static/img/mysql_logo.png" alt="" width="280px" height="150px">
+                        </td>
+                 <!--
+
+                 --><td>
+                 <div class= 'box' id="InstanceTotal_mysql"  style="height: 250px;width: 250px"></div>
+                    </td><td>
+                 <div class= 'box' id="InstanceUp_mysql"  style="height: 250px;width: 250px"></div>
+                </td><td>
+                 <div class= 'box' id="InstanceDown_mysql"  style="height: 250px;width: 250px"></div>
+                </td>
+                   <td>
+                        <FONT id="mysql_rt" style="FONT-SIZE: 30pt" face=华文新魏 color=#336699></FONT>
+                    </td>
+                </tr>
+                  </tr>
+                    <tr>
+                    <td>
+                     <img src="/static/img/postgre_logo.png" alt="" width="280px" height="150px">
+                        </td>
+                 <!--
+
+                 --><td>
+                 <div class= 'box' id="InstanceTotal_pg"  style="height: 250px;width: 250px"></div>
+                    </td><td>
+                 <div class= 'box' id="InstanceUp_pg"  style="height: 250px;width: 250px"></div>
+                </td><td>
+                 <div class= 'box' id="InstanceDown_pg"  style="height: 250px;width: 250px"></div>
+                </td>
+                     <td>
+                        <FONT id="pg_rt" style="FONT-SIZE: 30pt" face=华文新魏 color=#336699></FONT>
+                    </td>
+                </tr>
+
+                </table>
+
+    </div>
+    <!--
+    <iframe  width="100%" height="600px" name="main-iframe" src="http://10.67.200.39:5601/app/discover#/view/eba144f0-8d44-11ec-9dac-5bf6b2b89fc9" frfameborder="0"></iframe>
+    -->
+     <input id="response_data" type="hidden" value="{{ response_data }}">
+    </body>
+</html>
+    <script>
+str_data = document.getElementById('response_data').value;
+data_arry = eval('['+str_data.split('#')+']');
+mongo_total = data_arry[0].total_cnt;
+mongo_up = data_arry[0].active_cnt;
+mongo_down =  data_arry[0].inactive_cnt;
+
+mysql_total = data_arry[1].total_cnt;
+mysql_up = data_arry[1].active_cnt;
+mysql_down =  data_arry[1].inactive_cnt;
+
+pg_total = data_arry[2].total_cnt;
+pg_up = data_arry[2].active_cnt;
+pg_down =  data_arry[2].inactive_cnt;
+
+var chartDom = echarts.init(document.getElementById('container'));
+var charInstanceTotal = echarts.init(document.getElementById('InstanceTotal'));
+var charInstanceUp = echarts.init(document.getElementById('InstanceUp'));
+var charInstanceDown = echarts.init(document.getElementById('InstanceDown'));
+var mongo_rt = document.getElementById('mongo_rt');
+mongo_rt.innerHTML = "<B>Refresh Time："+new Date().toLocaleString();+"</B>";
+
+var option;
+
+option = {
+  tooltip: {
+    trigger: 'item'
+  },
+  series: [
+    {
+      name: 'Access From',
+      type: 'pie',
+      radius: '50%',
+      data: [
+        { value: 35, name: 'Mysql' },
+        { value: 156, name: 'Mongo' },
+        { value: 8, name: 'Postgre SQL' }
+      ],
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.5)'
+        }
+      }
+    }
+  ]
+};
+chartDom.on('click', function (params) {
+if (params.name == 'Mongo'){
+window.location.href = 'http://10.67.39.149:3000/d/g2v-STvGk/mongodb-all-instance?orgId=1'
+}
+
+});
+chartDom.setOption(option)
+
+var option2 = {
+  tooltip: {
+    formatter: '{a} <br/>{b} : {c}%'
+  },
+  series: [
+    {
+      name: 'Pressure',
+      type: 'gauge',
+      color: 'green',
+      progress: {
+        show: true,
+      },
+      detail: {
+        valueAnimation: true,
+        formatter: '{value}'
+      },
+      data: [
+        {
+          value: mongo_total,
+          name: 'Total'
+        }
+      ]
+    }
+  ]
+};
+charInstanceTotal.setOption(option2);
+option2.series[0].data[0].value= mongo_up;
+option2.series[0].data[0].name= 'UP';
+charInstanceUp.setOption(option2);
+option2.series[0].data[0].value= mongo_down;
+option2.series[0].data[0].name= 'down';
+option2.series[0].color= 'red';
+charInstanceDown.setOption(option2);
+charInstanceDown.on('click', function (params) {
+window.location.href = 'http://10.67.39.149:3000/d/TAnZNovMk/mongodb-alerts-overview?orgId=1'
+
+
+});
+
+
+////////////////////////mysql//////////////////////////////////////////////
+var charInstanceTotal_mysql = echarts.init(document.getElementById('InstanceTotal_mysql'));
+var charInstanceUp_mysql = echarts.init(document.getElementById('InstanceUp_mysql'));
+var charInstanceDown_mysql = echarts.init(document.getElementById('InstanceDown_mysql'));
+var mysql_rt = document.getElementById('mysql_rt');
+mysql_rt.innerHTML = "<B>Refresh Time："+new Date().toLocaleString();+"</B>";
+
+
+var option_mysql = {
+  tooltip: {
+    formatter: '{a} <br/>{b} : {c}%'
+  },
+  series: [
+    {
+      name: 'Pressure',
+      type: 'gauge',
+      color: 'green',
+      progress: {
+        show: true,
+      },
+      detail: {
+        valueAnimation: true,
+        formatter: '{value}'
+      },
+      data: [
+        {
+          value: mysql_total,
+          name: 'Total'
+        }
+      ]
+    }
+  ]
+};
+charInstanceTotal_mysql.setOption(option_mysql);
+option_mysql.series[0].data[0].value= mysql_up;
+option_mysql.series[0].data[0].name= 'UP';
+charInstanceUp_mysql.setOption(option_mysql);
+option_mysql.series[0].data[0].value=  mysql_down;
+option_mysql.series[0].data[0].name= 'down';
+option_mysql.series[0].color= 'red';
+charInstanceDown_mysql.setOption(option_mysql);
+charInstanceDown_mysql.on('click', function (params) {
+window.location.href = 'http://10.67.39.149:3000/d/TAnZNovMk/mongodb-alerts-overview?orgId=1'
+
+
+});
+
+////////////////////////pg//////////////////////////////////////////////
+var charInstanceTotal_pg = echarts.init(document.getElementById('InstanceTotal_pg'));
+var charInstanceUp_pg = echarts.init(document.getElementById('InstanceUp_pg'));
+var charInstanceDown_pg = echarts.init(document.getElementById('InstanceDown_pg'));
+var pg_rt = document.getElementById('pg_rt');
+pg_rt.innerHTML = "<B>Refresh Time："+new Date().toLocaleString();+"</B>";
+
+
+var option_pg = {
+  tooltip: {
+    formatter: '{a} <br/>{b} : {c}%'
+  },
+  series: [
+    {
+      name: 'Pressure',
+      type: 'gauge',
+      color: 'green',
+      progress: {
+        show: true,
+      },
+      detail: {
+        valueAnimation: true,
+        formatter: '{value}'
+      },
+      data: [
+        {
+          value: pg_total,
+          name: 'Total'
+        }
+      ]
+    }
+  ]
+};
+charInstanceTotal_pg.setOption(option_pg);
+option_pg.series[0].data[0].value= pg_up;
+option_pg.series[0].data[0].name= 'UP';
+charInstanceUp_pg.setOption(option_pg);
+option_pg.series[0].data[0].value=  pg_down;
+option_pg.series[0].data[0].name= 'down';
+option_pg.series[0].color= 'red';
+charInstanceDown_pg.setOption(option_pg);
+charInstanceDown_pg.on('click', function (params) {
+window.location.href = 'http://10.67.39.149:3000/d/TAnZNovMk/mongodb-alerts-overview?orgId=1'
+
+
+});
+
+window.setInterval(function(){
+    getData()
+},30000);
+
+function getData(){
+$.ajax({
+type:"GET",
+url:"/monitor/dashboard",
+dataType:"text",
+success:function(data){
+
+data_arry = eval('['+data.split('#')+']');
+mongo_total = data_arry[0].total_cnt;
+mongo_up = data_arry[0].active_cnt;
+mongo_down =  data_arry[0].inactive_cnt;
+
+mysql_total = data_arry[1].total_cnt;
+mysql_up = data_arry[1].active_cnt;
+mysql_down =  data_arry[1].inactive_cnt;
+
+pg_total = data_arry[2].total_cnt;
+pg_up = data_arry[2].active_cnt;
+pg_down =  data_arry[2].inactive_cnt;
+
+option2.series[0].data[0].value= mongo_down;
+option2.series[0].data[0].name= 'down';
+option2.series[0].color= 'red';
+charInstanceDown.setOption(option2);
+option2.series[0].data[0].value= mongo_up;
+option2.series[0].data[0].name= 'up';
+option2.series[0].color= 'green';
+charInstanceUp.setOption(option2);
+option2.series[0].data[0].value= mongo_total;
+option2.series[0].data[0].name= 'total';
+option2.series[0].color= 'green';
+charInstanceTotal.setOption(option2);
+mongo_rt.innerHTML = "<B>Refresh Time："+new Date().toLocaleString();+"</B>";
+
+option_mysql.series[0].data[0].value= mysql_down;
+option_mysql.series[0].data[0].name= 'down';
+option_mysql.series[0].color= 'red';
+charInstanceDown_mysql.setOption(option_mysql);
+option_mysql.series[0].data[0].value= mysql_up;
+option_mysql.series[0].data[0].name= 'up';
+option_mysql.series[0].color= 'green';
+charInstanceUp_mysql.setOption(option_mysql);
+option_mysql.series[0].data[0].value= mysql_total;
+option_mysql.series[0].data[0].name= 'total';
+option_mysql.series[0].color= 'green';
+charInstanceTotal_mysql.setOption(option_mysql);
+mysql_rt.innerHTML = "<B>Refresh Time："+new Date().toLocaleString();+"</B>";
+
+
+option_pg.series[0].data[0].value= pg_down;
+option_pg.series[0].data[0].name= 'down';
+option_pg.series[0].color= 'red';
+charInstanceDown_pg.setOption(option_pg);
+option_pg.series[0].data[0].value= pg_up;
+option_pg.series[0].data[0].name= 'up';
+option_pg.series[0].color= 'green';
+charInstanceUp_pg.setOption(option_pg);
+option_pg.series[0].data[0].value= pg_total;
+option_pg.series[0].data[0].name= 'total';
+option_pg.series[0].color= 'green';
+charInstanceTotal_pg.setOption(option_pg);
+pg_rt.innerHTML = "<B>Refresh Time："+new Date().toLocaleString();+"</B>";
+
+}
+});
+}
+
+
+    </script>

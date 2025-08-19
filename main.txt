@@ -1,3 +1,19 @@
+   def main(self):
+        self.app.app_context().push()
+        self.getServerList()
+        paral1 = []
+        paral2 = []
+        paral3 = []
+        for server in  self.severList:
+            paral1.append(server[0])
+            paral2.append(server[1])
+            paral3.append(server[2])
+
+        with futures.ThreadPoolExecutor(20) as executor:
+                executor.map(self.dbChecker, paral1,paral2,paral3)
+
+from concurrent import futures
+
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
         "http://www.w3.org/TR/html4/loose.dtd">
 <html>

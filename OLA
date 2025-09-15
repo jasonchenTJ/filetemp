@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商品列表与详情</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            color: #333;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+        
+        .product-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .product-table th, .product-table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #eaeaea;
+        }
+        
+        .product-table th {
+            background-color: #3498db;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .product-table tr {
+            transition: background-color 0.2s;
+        }
+        
+        .product-table tr:not(:first-child):hover {
+            background-color: #f1f8ff;
+            cursor: pointer;
+        }
+        
+        .product-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .product-table tr:nth-child(even):hover {
+            background-color: #e8f4ff;
+        }
+        
+        .price {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        
+        .stock {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: inline-block;
+        }
+        
+        .in-stock {
+            background-color: #2ecc71;
+            color: white;
+        }
+        
+        .low-stock {
+            background-color: #f39c12;
+            color: white;
+        }
+        
+        .out-of-stock {
+            background-color: #95a5a6;
+            color: white;
+        }
+        
+        /* 弹窗样式 */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal-content {
+            background-color: white;
+            width: 90%;
+            max-width: 700px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transform: translateY(-50px);
+            transition: transform 0.5s ease;
+        }
+        
+        .modal-overlay.active .modal-content {
+            transform: translateY(0);
+        }
+        
+        .modal-header {
+            background-color: #3498db;
+            color: white;
+            padding: 20px;
+            position: relative;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        
+        .modal-body {
+            padding: 25px;
+            display: flex;
+            flex-wrap: wrap;
+        }
+        
+        .product-image {
+            flex: 0 0 40%;
+            padding-right: 20px;
+        }
+        
+        .product-image img {
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .product-details {
+            flex: 0 0 60%;
+        }
+        
+        .detail-item {
+            margin-bottom: 15px;
+        }
+        
+        .detail-item label {
+            font-weight: 600;
+            color: #7f8c8d;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .detail-item span {
+            color: #2c3e50;
+            font-size: 16px;
+        }
+        
+        .description {
+            line-height: 1.6;
+        }
+        
+        @media (max-width: 768px) {
+            .modal-body {
+                flex-direction: column;
+            }
+            
+            .product-image, .product-details {
+                flex: 0 0 100%;
+            }
+            
+            .product-image {
+                padding-right: 0;
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>商品列表</h1>
+        
+        <table class="product-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>商品名称</th>
+                    <th>价格</th>
+                    <th>库存状态</th>
+                    <th>分类</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr data-id="1" data-name="智能手机 X1" data-price="3999" data-stock="充足" data-category="电子产品" data-desc="最新款智能手机，配备高性能处理器和超清摄像头，提供流畅的使用体验和出色的拍照效果。">
+                    <td>1</td>
+                    <td>智能手机 X1</td>
+                    <td class="price">¥3,999</td>
+                    <td><span class="stock in-stock">充足</span></td>
+                    <td>电子产品</td>
+                </tr>
+                <tr data-id="2" data-name="无线耳机" data-price="899" data-stock="充足" data-category="电子产品" data-desc="高品质无线蓝牙耳机，降噪功能出色，续航时间长达20小时。">
+                    <td>2</td>
+                    <td>无线耳机</td>
+                    <td class="price">¥899</td>
+                    <td><span class="stock in-stock">充足</span></td>
+                    <td>电子产品</td>
+                </tr>
+                <tr data-id="3" data-name="运动鞋" data-price="599" data-stock="不足" data-category="服装鞋帽" data-desc="轻便舒适的运动鞋，采用透气材料，适合各种运动场合。">
+                    <td>3</td>
+                    <td>运动鞋</td>
+                    <td class="price">¥599</td>
+                    <td><span class="stock low-stock">不足</span></td>
+                    <td>服装鞋帽</td>
+                </tr>
+                <tr data-id="4" data-name="咖啡机" data-price="1299" data-stock="缺货" data-category="家用电器" data-desc="全自动咖啡机，一键制作多种咖啡，小巧设计适合家庭使用。">
+                    <td>4</td>
+                    <td>咖啡机</td>
+                    <td class="price">¥1,299</td>
+                    <td><span class="stock out-of-stock">缺货</span></td>
+                    <td>家用电器</td>
+                </tr>
+                <tr data-id="5" data-name="编程书籍" data-price="89" data-stock="充足" data-category="图书" data-desc="Web开发入门到实践，包含大量实例和项目，适合初学者和进阶开发者。">
+                    <td>5</td>
+                    <td>编程书籍</td>
+                    <td class="price">¥89</td>
+                    <td><span class="stock in-stock">充足</span></td>
+                    <td>图书</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- 弹窗 -->
+    <div class="modal-overlay" id="productModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>商品详情</h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="product-image">
+                    <img id="detail-image" src="https://via.placeholder.com/300" alt="商品图片">
+                </div>
+                <div class="product-details">
+                    <div class="detail-item">
+                        <label>商品名称</label>
+                        <span id="detail-name"></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>价格</label>
+                        <span id="detail-price" class="price"></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>库存状态</label>
+                        <span id="detail-stock"></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>分类</label>
+                        <span id="detail-category"></span>
+                    </div>
+                    <div class="detail-item">
+                        <label>商品描述</label>
+                        <p id="detail-desc" class="description"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            // 点击表格行显示详情
+            $('.product-table tbody tr').click(function() {
+                // 获取商品数据
+                const id = $(this).data('id');
+                const name = $(this).data('name');
+                const price = $(this).data('price');
+                const stock = $(this).data('stock');
+                const category = $(this).data('category');
+                const desc = $(this).data('desc');
+                
+                // 设置图片（根据ID使用不同的占位图）
+                $('#detail-image').attr('src', `https://via.placeholder.com/300/3498db/ffffff?text=${encodeURIComponent(name)}`);
+                
+                // 填充详情数据
+                $('#detail-name').text(name);
+                $('#detail-price').text('¥' + price);
+                $('#detail-category').text(category);
+                $('#detail-desc').text(desc);
+                
+                // 设置库存状态及样式
+                const stockElement = $('#detail-stock');
+                stockElement.text(stock);
+                stockElement.removeClass('in-stock low-stock out-of-stock');
+                
+                if (stock === '充足') {
+                    stockElement.addClass('stock in-stock');
+                } else if (stock === '不足') {
+                    stockElement.addClass('stock low-stock');
+                } else {
+                    stockElement.addClass('stock out-of-stock');
+                }
+                
+                // 显示弹窗
+                $('#productModal').addClass('active');
+            });
+            
+            // 关闭弹窗
+            $('.close-btn').click(function() {
+                $('#productModal').removeClass('active');
+            });
+            
+            // 点击弹窗外部关闭
+            $(document).on('click', function(e) {
+                if ($(e.target).hasClass('modal-overlay')) {
+                    $('#productModal').removeClass('active');
+                }
+            });
+            
+            // 按ESC键关闭弹窗
+            $(document).keyup(function(e) {
+                if (e.key === "Escape") {
+                    $('#productModal').removeClass('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

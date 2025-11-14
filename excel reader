@@ -1,0 +1,19 @@
+import pandas as pd
+
+# 读取Excel文件
+df = pd.read_excel('your_file.xlsx')
+
+# 读取某一列
+# 方法1：使用列名
+column_data = df['column_name']
+
+# 方法2：使用点符号
+column_data = df.column_name
+
+# 方法3：使用iloc按位置索引
+column_data = df.iloc[:, 0]  # 第一列
+
+# 转换为列表
+column_list = df['column_name'].tolist()
+
+print(column_data)

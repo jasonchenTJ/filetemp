@@ -1,0 +1,66 @@
+from langchain_elasticsearch import ElasticsearchStore
+from langchain.embeddings.huggingface import HuggingFaceEmbeddings
+from langchain_community.document_loaders import TextLoader
+from langchain_text_splitters import CharacterTextSplitter
+from elasticsearch import Elasticsearch
+from langchain.schema.document import Document
+import uvicorn
+from fastapi import FastAPI
+
+
+app = FastAPI()
+index_name = 'dabiaoge_vector'
+embeddings = HuggingFaceEmbeddings(model_name='/logs/model/text2vec-large-chinese')
+es_connection = Elasticsearch("http://10.25.2.105:9233")
+
+
+def _embeddings_hash(self):
+    return hash(self.model_name)
+
+
+def get_text_chunks_langchain(text):
+    text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=0)
+    docs = [Document(page_content=x) for x in text_splitter.split_text(text)]
+    return docs
+
+
+     
+
+
+def load_vector2es(es_connection,index_name,text):
+
+
+    HuggingFaceEmbeddings.__hash__ = _embeddings_hash
+    doc = get_text_chunks_langchain(text)
+    db = ElasticsearchStore.from_documents(
+     doc,
+     embeddings,
+     index_name=index_name,
+     es_connection=es_connection)
+
+
+
+
+def query_vector(es_connection,embeddings,index_name,query):
+     db = ElasticsearchStore(
+     embedding=embeddings,
+     index_name=index_name,
+     es_connection=es_connection)    
+     db.client.indices.refresh(index=index_name)
+     results = db.similarity_search(query,k=1)
+     return results
+
+
+
+
+
+
+@app.get("/esvector/{query}")
+def api_query_vector(query):
+    return query_vector(es_connection,embeddings,index_name,query);
+
+
+    
+if __name__ == '__main__':
+    for text in ['2024年4月30号 晚上 7点半 在天津泰达足球场 将进行中超比赛 津门虎对阵北京国安。','林俊杰演唱会在天津4月19号晚上7点奥体中心举行。']
+       load_vector2es(es_connection,index_name,text)

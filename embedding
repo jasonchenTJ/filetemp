@@ -1,0 +1,49 @@
+from langchain_core.embeddings import Embeddings
+from sentence_transformers import SentenceTransformer
+from typing import List
+import numpy as np
+
+class SentenceTransformerEmbeddings(Embeddings):
+    """直接使用 SentenceTransformer 的自定义 Embedding 类"""
+    
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", device: str = "cpu"):
+        self.model = SentenceTransformer(model_name, device=device)
+        self.device = device
+    
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """嵌入文档列表"""
+        embeddings = self.model.encode(texts, convert_to_numpy=True)
+        return embeddings.tolist()
+    
+    def embed_query(self, text: str) -> List[float]:
+        """嵌入查询文本"""
+        embedding = self.model.encode(text, convert_to_numpy=True)
+        return embedding.tolist()
+    
+    def embed_with_batch(self, texts: List[str], batch_size: int = 32) -> List[List[float]]:
+        """批量嵌入，支持批处理大小控制"""
+        embeddings = self.model.encode(
+            texts, 
+            batch_size=batch_size,
+            convert_to_numpy=True,
+            show_progress_bar=True
+        )
+        return embeddings.tolist()
+    
+    def get_dimension(self) -> int:
+        """获取嵌入向量的维度"""
+        test_embedding = self.model.encode(["test"])
+        return test_embedding.shape[1]
+
+# 使用示例
+sentence_embeddings = SentenceTransformerEmbeddings(
+    model_name="all-MiniLM-L6-v2",
+    device="cpu"
+)
+
+print(f"向量维度: {sentence_embeddings.get_dimension()}")
+
+# 生成嵌入
+texts = ["文档1", "文档2", "文档3"]
+embeddings = sentence_embeddings.embed_documents(texts)
+print(f"生成了 {len(embeddings)} 个向量，每个维度 {len(embeddings[0])}")

@@ -1,0 +1,98 @@
+import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain.tools import tool
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+# 加载环境变量
+load_dotenv()
+
+
+# ========== 1. 定义邮件工具 ==========
+@tool
+def send_email(recipient: str, subject: str, body: str) -> str:
+    """
+    发送邮件的工具函数。
+    recipient: 收件人邮箱地址
+    subject: 邮件主题
+    body: 邮件正文内容
+    """
+    try:
+        # 邮件配置（请替换为你的邮箱配置）
+        SMTP_SERVER = "smtp.163.com"  # 163邮箱 SMTP 服务器
+        SMTP_PORT = 25  # SSL 端口
+        SENDER_EMAIL = "chenxu_0209@163.com"  # 你的网易邮箱地址
+        SENDER_PASSWORD = "BVgwCEqpLbuYxDSF"  # 网易邮箱授权码（不是登录密码）
+
+        # 构建邮件
+        msg = MIMEMultipart()
+        msg["From"] = SENDER_EMAIL
+        msg["To"] = recipient
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+
+        # 发送邮件
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+
+        return f"邮件已成功发送给 {recipient}"
+    except Exception as e:
+        return f"发送失败: {str(e)}"
+
+
+# ========== 2. 初始化 DeepSeek LLM ==========
+# DeepSeek API 兼容 OpenAI 格式，使用 ChatOpenAI 类调用
+llm = ChatOpenAI(
+    model="deepseek-chat",  # DeepSeek 模型名称
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    base_url="https://api.deepseek.com/v1",  # DeepSeek API 地址[citation:4]
+    temperature=0.7,
+)
+
+# ========== 3. 配置 Agent Prompt ==========
+prompt = ChatPromptTemplate.from_messages([
+    ("system", """你是一个智能邮件助手。当用户需要发送邮件时，使用 send_email 工具。
+    你需要从用户的指令中提取收件人、主题和正文内容。
+    如果信息不完整，请向用户询问缺失的信息。"""),
+    MessagesPlaceholder(variable_name="chat_history", optional=True),
+    ("human", "{input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad"),
+])
+
+# ========== 4. 创建 Agent ==========
+tools = [send_email]
+agent = create_tool_calling_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(
+    agent=agent,
+    tools=tools,
+    verbose=True,  # 打印执行过程，便于调试
+    handle_parsing_errors=True,
+)
+
+# ========== 5. 运行测试 ==========
+if __name__ == "__main__":
+
+
+    # 示例1：直接发送邮件
+    print("=" * 50)
+    print("测试1：发送邮件")
+    result = agent_executor.invoke({
+        "input": "请给 chenxu_0209@sina.com 发一封邮件，主题是'测试邮件'，内容是'这是一封通过AI Agent自动发送的测试邮件'"
+    })
+    print(f"结果: {result['output']}")
+
+    # 示例2：自然语言交互
+    print("\n" + "=" * 50)
+    print("测试2：自然语言交互")
+    result = agent_executor.invoke({
+        "input": "帮我给老板发个邮件，告诉他今天的会议推迟到下午3点"
+    })
+    print(f"结果: {result['output']}")

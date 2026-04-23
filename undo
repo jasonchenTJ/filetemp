@@ -1,0 +1,17 @@
+SELECT s.inst_id,
+       r.NAME,
+       s.sid SID,
+       s.serial#,
+       s.username,
+       s.machine,
+       t.start_time,
+       t.status,
+       (t.used_ublk*1024*8)/1024/1024/1024
+  FROM gv$session s, gv$transaction t, v$rollname r, gv$rollstat g
+WHERE t.addr = s.taddr
+   AND t.xidusn = r.usn
+   AND r.usn = g.usn
+   And s.STATUS = 'ACTIVE'
+   and s.inst_id = t.inst_id
+   and t.inst_id = g.inst_id
+ORDER BY t.used_ublk desc;

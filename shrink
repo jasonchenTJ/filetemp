@@ -1,0 +1,77 @@
+set linesize 150 pagesize 100
+column tablespace_name format A15
+column file_id format A4 head ID
+column file_name format A50
+column status format A7
+column ext format A3
+column file_size format 90.9 head "SIZE(GB)"
+column used_size format 90.9 head "USED(GB)"
+column free_size format 90.9 head "FREE(GB)"
+column shrink_size format 90.9 head "FREEABLE(GB)"
+column resize_size format 99990 head "RESIZE(MB)"
+variable giga_bytes number
+begin :giga_bytes := 1024 * 1024 * 1024; end;
+/
+set timing on
+WITH tablespaces AS
+   (SELECT tablespace_name, block_size
+      FROM dba_tablespaces
+     WHERE tablespace_name LIKE UPPER('%&tbs%')
+   ),
+   full_free_space AS
+   (SELECT tablespace_name,
+           file_id,
+           bytes,
+           blocks,
+           block_id
+      FROM dba_free_space
+     WHERE tablespace_name IN (SELECT tablespace_name FROM tablespaces)
+     UNION ALL
+    SELECT a.tablespace_name,
+           a.file_id,
+           c.block_size,
+           1,
+           a.blocks
+      FROM dba_data_files a,
+           tablespaces c
+     WHERE a.tablespace_name = c.tablespace_name
+   )
+SELECT a.tablespace_name                         AS tablespace_name,
+       a.file_id || ''                           AS file_id,
+       a.file_name                               AS file_name,
+       a.bytes / :giga_bytes                     AS file_size,
+       (a.bytes - nvl(b.bytes, 0)) / :giga_bytes AS used_size,
+       nvl(b.bytes, 0) / :giga_bytes             AS free_size,
+       nvl(c.bytes, 0) / :giga_bytes             AS shrink_size,
+       (a.bytes - nvl(c.bytes, 0)) / 1024 / 1024 AS resize_size,
+       a.online_status                           AS status,
+       a.autoextensible                          AS ext
+  FROM dba_data_files a,
+       (SELECT file_id, SUM(bytes) AS bytes FROM full_free_space GROUP BY file_id) b,
+       (SELECT file_id,
+               SUM(bytes) AS bytes
+          FROM (SELECT *
+                  FROM (SELECT t. *,
+                               tablespace_name || '-' || file_id || '-' || the_lead AS full_lead,
+                               tablespace_name || '-' || file_id || '-' || block_id AS full_block_id
+                          FROM (SELECT tablespace_name,
+                                       file_id,
+                                       block_id,
+                                       bytes,
+                                       blocks,
+                                       block_id + blocks                                                             AS the_end,
+                                       LEAD(block_id) over (PARTITION BY tablespace_name, file_id ORDER BY block_id) AS the_lead,
+                                       (SELECT bytes FROM dba_data_files WHERE file_id = dfs.file_id)                AS file_size
+                                  FROM full_free_space dfs) t
+                         WHERE the_end = the_lead
+                            OR (the_lead IS NULL AND ((the_end - 1) * bytes / blocks = file_size))
+                       )
+                 START WITH the_lead IS NULL CONNECT BY PRIOR full_block_id = full_lead
+               )
+         GROUP BY file_id) c
+WHERE a.file_id = b.file_id(+)
+   AND a.file_id = c.file_id(+)
+   AND a.tablespace_name IN (SELECT tablespace_name FROM tablespaces)
+ORDER BY a.tablespace_name,
+          regexp_substr(a.file_name, '[^/]+$')
+/
